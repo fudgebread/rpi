@@ -4,7 +4,7 @@
 #
 
 TOP=..
-INSTALL_BIN=/usr/bin/install -c -m 444
+INSTALL_BIN=/usr/bin/install -c -m 555
 INSTALL_DIR=rpi_build
 
 .PHONY: all
