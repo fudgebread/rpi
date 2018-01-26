@@ -19,7 +19,7 @@ all: main.o
 	for dir in $(SUBDIRS); do \
 	  $(MAKE) -C $$dir all; \
 	done
-	$(CC) -o rpi-gpio main.o lib/librpigpio.a 
+	$(CC) -o rpi-gpio-console main.o lib/librpigpio.a -lpthread -Wall
 
 .PHONY: install
 install: all
@@ -28,13 +28,13 @@ install: all
 	for dir in $(SUBDIRS); do \
 	  $(MAKE) -C $$dir install; \
 	done
-	$(INSTALL_BIN) rpi-gpio $(INSTALL_DIR)/usr/local/bin
+	$(INSTALL_BIN) rpi-gpio-console $(INSTALL_DIR)/usr/local/bin
 	
 .PHONY: deploy
 deploy: install	
 	# Make the control file
-	echo "Package: rpi-gpio" > control
-	echo "Version: 1.0.0" >> control
+	echo "Package: $(PKG_NAME)" > control
+	echo "Version: 1.0.$(PKG_NO)" >> control
 	echo "Architecture: all" >> control
 	echo "Maintainer: fudgebread" >> control
 	echo "Description: Basic ipk for rpi gpio." >> control

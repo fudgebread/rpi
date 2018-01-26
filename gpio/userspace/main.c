@@ -7,38 +7,92 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <errno.h>
+#include <pthread.h>
+#include <string.h>
 
 #include "include/lib_gpio.h"
 
-int main(int argc, char *argv[])
+#define CMD_OPEN "open"
+#define CMD_CLOSE "close"
+#define CMD_DIR "dir"
+#define CMD_READ "read"
+#define CMD_WRITE "write"
+#define CMD_EXIT "quit"
+
+static const char *commands[] = {CMD_OPEN, CMD_CLOSE, 
+	                             CMD_READ, CMD_WRITE};
+static void printHelp()
 {
-	int i, gpio=26;
-	printf("Starting gpio examples...\n");
+	printf("       [open|close|dir|read|write] <gpio> [in|out] [value]\n");
+}
+
+static void* getUserInput(void *args)
+{
+	int gpio, value, i, run=1;
+	char input[80], command[10], dir[5];
 	
-	printf("Opening GPIO %d\n", gpio);
-	
-	if (libGpioOpen(gpio) != 0)
-		return -1;
+	while (run) {
+		printf("GPIO > ");
+		fgets(input, 80, stdin);
 		
-	if (libGpioDirection(gpio, 0) != 0)
-		return -1;
-		
-	for (i=0; i<10; i++) {
-		printf("Write 1 to gpio %d\n", gpio);
-		if (libGpioBitWrite(gpio, 1) != 0) {
-			return -1;
+		if (sscanf(input, "%s %d %s %d\n", command, &gpio, dir) < 1) {
+			printf("GPIO > invalid command.  Try help\nGPIO > ");
 		}
-		sleep(1);
 		
-		printf("Write 0 to gpio %d\n", gpio);
-		if (libGpioBitWrite(gpio, 0) != 0) {
-			return -1;
+		if (strcmp(command, CMD_OPEN) == 0) {
+			libGpioOpen(gpio);
 		}
-		sleep(1);
+		else if (strcmp(command, CMD_CLOSE) == 0) {
+			libGpioClose(gpio);
+		}
+		else if (strcmp(command, CMD_DIR) == 0) {
+			if (strcmp(dir, "in") == 0) {
+				libGpioDirection(gpio, 1);
+			}
+			else if (strcmp(dir, "out") == 0) {
+				libGpioDirection(gpio, 0);
+			}
+			else {
+				printHelp();
+			}
+		}
+		else if (strcmp(command, CMD_READ) == 0) {
+			libGpioBitRead(gpio, &value);
+		}
+		else if (strcmp(command, CMD_WRITE) == 0) {
+			libGpioBitWrite(gpio, atoi(dir));
+		}
+		else if (strcmp(command, CMD_EXIT) == 0) {
+			run = 0;
+		}
+		else {
+			printHelp();
+		}
 	}
 	
-	if (libGpioClose(gpio) != 0)
+	printf("GPIO > fin!\n");
+	return NULL;
+}
+
+int main(int argc, char *argv[])
+{
+	int status;
+	pthread_t userThread;
+	
+	printf("Starting gpio console\n");
+	
+	status = pthread_create(&userThread, NULL, getUserInput, NULL);
+    if (status != 0) {
+		fprintf(stderr, "Could not create user input thread (%d)\n", errno);
 		return -1;
+	}
+    
+	status = pthread_join(userThread, NULL);
+	if (status != 0) {
+		fprintf(stderr, "Could not join user input thread (%d)\n", errno);
+		return -1;
+	}
 		
 	return 0;
 }
