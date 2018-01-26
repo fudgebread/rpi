@@ -1,0 +1,63 @@
+#!/bin/bash
+#
+# Script to create a build shell for a target architecture
+#
+
+setup=0
+arch=""
+
+rpi_v1_build=". /opt/sdks/rpi/2.3.20170903/environment-setup-arm1176jzfshf-vfp-poky-linux-gnueabi"
+
+function usage () {
+	echo "Usage:"
+	echo "    setup {select <arch>}"
+	echo "        arch: native, rpi"
+	echo
+}
+
+function parse_arch () {
+	case $1 in
+		"rpi")
+			. rpiSetup.sh
+			HISTFILE= PS1='${debian_chroot:+($debian_chroot)}rpi build@\h:\w\$ ' exec $SHELL --norc -i
+		;;
+		"vm")
+			export KERNEL_SRC=/usr/src/linux-headers-4.10.0-33-generic/
+			HISTFILE= PS1='${debian_chroot:+($debian_chroot)}vm build@\h:\w\$ ' exec $SHELL --norc -i
+		;;
+		"other")
+			export KERNEL_SRC=/usr/src/linux-headers-4.4.0-81-generic
+			HISTFILE= PS1='${debian_chroot:+($debian_chroot)}other build@\h:\w\$ ' exec $SHELL --norc -i
+		;;
+		*)
+		return -1
+		;;
+	esac
+}
+
+if [ $# -lt 1 ]; then
+    usage
+    exit -1
+else
+	while [[ $# -gt 0 ]] ; do
+		case $1 in
+			-h|-\?|--help)
+				usage
+				;;
+			-s|--setup)            
+				if [ -n "$2" ]; then
+					arch=$2
+					parse_arch $2
+					setup=1
+					shift
+				fi
+				;;
+			*)
+				usage
+			;;
+		esac
+		shift
+	done
+fi
+
+exit 0
