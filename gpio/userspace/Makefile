@@ -19,44 +19,45 @@ all: main.o
 	for dir in $(SUBDIRS); do \
 	  $(MAKE) -C $$dir all; \
 	done
-	$(CC) -o rpi-gpio main.o lib/librpigpio.a 
+	$(CC) -o rpi-gpio-console main.o lib/librpigpio.a -lpthread -Wall
 
 .PHONY: install
 install: all
-	# Make the package structure and copy the binaries
+# Make the package structure and copy the binaries
 	mkdir -p $(INSTALL_DIR)/usr/local/bin
 	for dir in $(SUBDIRS); do \
 	  $(MAKE) -C $$dir install; \
 	done
-	$(INSTALL_BIN) rpi-gpio $(INSTALL_DIR)/usr/local/bin
+	$(INSTALL_BIN) rpi-gpio-console $(INSTALL_DIR)/usr/local/bin
 	
 .PHONY: deploy
 deploy: install	
-	# Make the control file
-	echo "Package: rpi-gpio" > control
-	echo "Version: 1.0.0" >> control
-	echo "Architecture: all" >> control
-	echo "Maintainer: fudgebread" >> control
-	echo "Description: Basic ipk for rpi gpio." >> control
+# Make the control file
+	@echo "Package: $(PKG_NAME)" > control
+	@echo "Version: 1.0.$(PKG_NO)" >> control
+	@echo "Architecture: all" >> control
+	@echo "Maintainer: fudgebread" >> control
+	@echo "Description: Basic ipk for rpi gpio." >> control
 
-	# And the mandatory debian-binary file for ipks
-	echo "2.0" > debian-binary
+# And the mandatory debian-binary file for ipks
+	@echo "2.0" > debian-binary
 	
-	# Tar everything up
-	tar czf control.tar.gz control
-	tar czf data.tar.gz -C $(INSTALL_DIR) .
-	ar -r $(PKG_NAME)-$(PKG_NO).ipk debian-binary control.tar.gz data.tar.gz 
+# Tar everything up
+	@tar czf control.tar.gz control
+	@tar czf data.tar.gz -C $(INSTALL_DIR) .
+	@ar -r $(PKG_NAME)-$(PKG_NO).ipk debian-binary control.tar.gz data.tar.gz 
 	
-	# Housekeeping
-	rm control
-	rm debian-binary
-	rm *.gz
-	echo `expr $(PKG_NO) + 1` > $(TOP)/buildnum.txt
+# Housekeeping
+	@rm control
+	@rm debian-binary
+	@rm *.gz
+	@echo `expr $(PKG_NO) + 1` > $(TOP)/buildnum.txt
 	
 .PHONY: clean
 clean:
-	rm -rf $(INSTALL_DIR)
-	rm main.o rpi-gpio
+	-@rm -rf $(INSTALL_DIR)
+	-@rm main.o rpi-gpio-console
+	-@rm *.ipk
 	for dir in $(SUBDIRS); do \
 	  $(MAKE) -C $$dir clean; \
 	done
