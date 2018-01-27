@@ -13,6 +13,7 @@
 
 #include "include/lib_gpio.h"
 
+#define CMD_STATUS "status"
 #define CMD_OPEN "open"
 #define CMD_CLOSE "close"
 #define CMD_DIR "dir"
@@ -20,11 +21,30 @@
 #define CMD_WRITE "write"
 #define CMD_EXIT "quit"
 
-static const char *commands[] = {CMD_OPEN, CMD_CLOSE, 
-                                 CMD_READ, CMD_WRITE};
 static void printHelp()
 {
-    printf("       [open|close|dir|read|write] <gpio> [in|out] [value]\n");
+    printf("       status [open|close|dir|read|write] <gpio> [in|out] [value]\n");
+}
+
+static void printStatus()
+{
+	int i;
+	gpioStatus_t info;
+	
+	printf("       GPIO | Open | Direction | Reading\n"); 
+	printf("       -----+------+-----------+--------\n"); 
+	printf("        %d  | %s   |     %s    |    %d  \n"); 
+	for (i=GPIO_MIN; i<GPIO_MAX; i++) {
+		if (libGpioStatus(i, &info) == 0) {
+			printf("        %d  | %d   |     %s    |    %d  \n",
+					i, info.open ? "yes" : "no",
+					info.direction ? "in" : "out",
+					info.value); 
+		}
+		else {
+			printf("        %d  | ???  |    ???    |   ???  \n", i); 
+		}
+	}
 }
 
 static void* getUserInput(void *args)
@@ -40,7 +60,10 @@ static void* getUserInput(void *args)
             printf("GPIO > invalid command.  Try help\nGPIO > ");
         }
         
-        if (strcmp(command, CMD_OPEN) == 0) {
+        if (strcmp(command, CMD_STATUS) == 0) {
+            printStatus();
+        }
+        else if (strcmp(command, CMD_OPEN) == 0) {
             libGpioOpen(gpio);
         }
         else if (strcmp(command, CMD_CLOSE) == 0) {

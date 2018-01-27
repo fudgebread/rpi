@@ -13,18 +13,25 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+#include "../include/lib_gpio.h"
+
 #define GPIO_PATH_EXPORT "/sys/class/gpio/export"
 #define GPIO_PATH_UNEXPORT "/sys/class/gpio/unexport"
 #define GPIO_PATH "/sys/class/gpio/gpio%d"
 #define GPIO_PATH_DIRECTION "/sys/class/gpio/gpio%d/direction"
 #define GPIO_PATH_VALUE "/sys/class/gpio/gpio%d/value"
 #define GPIO_PATH_BUFF_MAX 40
-#define GPIO_MIN 2
-#define GPIO_MAX 27
+#define GPIO_TOTAL (GPIO_MAX-GPIO_MIN+1)
+#define USER_TO_GPIO(a) (a-GPIO_MIN)
 
 /* Buffer for gpio path manipulation */
-static char g_gpioPathBuff[GPIO_PATH_BUFF_MAX];
+static char gpioPathBuff[GPIO_PATH_BUFF_MAX];
 
+/* GPIO info array */
+static gpioStatus_t gpioInfo[GPIO_TOTAL];
+
+/* Whether or not we have initialised the info array */
+static int initialised = 0;
 
 /***********************************************************************
  * 
@@ -42,25 +49,40 @@ static int gpioRangeCheck(int gpio)
 
 static void makeGpioPath(int gpio, char *path)
 {
-    memset(g_gpioPathBuff, 0, GPIO_PATH_BUFF_MAX);
-    sprintf(g_gpioPathBuff, path, gpio);
+    memset(gpioPathBuff, 0, GPIO_PATH_BUFF_MAX);
+    sprintf(gpioPathBuff, path, gpio);
 }
 
 static int gpioOpen(int gpio)
 {
     makeGpioPath(gpio, GPIO_PATH);
-    if (access(g_gpioPathBuff, F_OK) != 0) {
+    if (access(gpioPathBuff, F_OK) != 0) {
         printf("Gpio not exported: gpio=%d\n", gpio);
         return 0;
     }
     
     return 1;
 }
+
 /***********************************************************************
  * 
  * API
  * 
  **********************************************************************/
+void libGpioInit(int gpio)
+{
+    int i, j;
+    
+    if (initialised)
+        return;
+        
+    for (i=0, j=GPIO_MIN; i<GPIO_TOTAL; i++, j++) {
+        memset(&gpioInfo[i].gpio, 0, sizeof(gpioStatus_t));
+        gpioInfo[i].gpio = j;
+        gpioInfo[i].open = 0;
+    }
+    initialised = 1;
+}
 
 int libGpioOpen(int gpio)
 {
@@ -70,11 +92,9 @@ int libGpioOpen(int gpio)
     if (!gpioRangeCheck(gpio))
         return -1;        
     
-    // check gpio already open
-    makeGpioPath(gpio, GPIO_PATH);
-    if (access(g_gpioPathBuff, F_OK) == 0) {
-        printf("Gpio already exported: gpio=%d\n", gpio);
-        return -2;
+    if (gpioInfo[USER_TO_GPIO(gpio)].open) {
+        printf("GPIO already open: gpio=%d, errno=%d\n", gpio, errno);
+        return 0;
     }
     
     // echo [gpio] > export
@@ -88,19 +108,11 @@ int libGpioOpen(int gpio)
     write(fd, tmpBuff, 4);
     close(fd);
     
+    gpioInfo[USER_TO_GPIO(gpio)].open = 1;
+    
     return 0;
 }
 
-/**
- * Close a gpio port.
- * 
- * @param gpio the gpio pin
- * 
- * @return 0 success
- * @return -1 invalid gpio
- * @return -2 gpio not open
- * @return -3 other error occurred
- **/
 int libGpioClose(int gpio)
 {
     char tmpBuff[4];
@@ -109,8 +121,11 @@ int libGpioClose(int gpio)
     if (!gpioRangeCheck(gpio))
         return -1;        
     
-    if (!gpioOpen(gpio))
-        return -2;
+    // if it's not open then it's already closed
+    if (!gpioInfo[USER_TO_GPIO(gpio)].open) {
+        printf("GPIO already closed: gpio=%d, errno=%d\n", gpio, errno);
+        return 0;
+    }
     
     // echo [gpio] > unexport
     fd = open(GPIO_PATH_UNEXPORT, O_WRONLY);
@@ -123,6 +138,7 @@ int libGpioClose(int gpio)
     write(fd, tmpBuff, 4);
     close(fd);
     
+    gpioInfo[USER_TO_GPIO(gpio)].open = 0;
     return 0;
 }
 
@@ -132,12 +148,14 @@ int libGpioDirection(int gpio, int direction)
     if (!gpioRangeCheck(gpio))
         return -1;    
         
-    if (!gpioOpen(gpio))
+    if (!gpioInfo[USER_TO_GPIO(gpio)].open) {
+        printf("GPIO not open: gpio=%d, errno=%d\n", gpio, errno);
         return -2;
+    }
         
     makeGpioPath(gpio, GPIO_PATH_DIRECTION);
     
-    fd = open(g_gpioPathBuff, O_WRONLY);
+    fd = open(gpioPathBuff, O_WRONLY);
     if (fd <= 0) {
         printf("Failed to set gpio direction: gpio=%d, errno=%d\n", gpio, errno);
         return -3;
@@ -150,6 +168,8 @@ int libGpioDirection(int gpio, int direction)
         
     close(fd);
     
+    gpioInfo[USER_TO_GPIO(gpio)].direction = direction;
+    
     return 0;
 }
 
@@ -161,12 +181,14 @@ int libGpioBitRead(int gpio, int *value)
     if (!gpioRangeCheck(gpio))
         return -1;    
         
-    if (!gpioOpen(gpio))
+    if (!gpioInfo[USER_TO_GPIO(gpio)].open) {
+        printf("GPIO not open: gpio=%d, errno=%d\n", gpio, errno);
         return -2;
+    }
         
     makeGpioPath(gpio, GPIO_PATH_VALUE);
     
-    fd = open(g_gpioPathBuff, O_RDONLY);
+    fd = open(gpioPathBuff, O_RDONLY);
     if (fd <= 0) {
         printf("Failed to open gpio value: gpio=%d, errno=%d\n", gpio, errno);
         return -3;
@@ -180,6 +202,8 @@ int libGpioBitRead(int gpio, int *value)
     close(fd);
  
     *value = atoi(val);
+    gpioInfo[USER_TO_GPIO(gpio)].value = *value;
+    
     return 0;
 }
 
@@ -191,12 +215,14 @@ int libGpioBitWrite(int gpio, int value)
     if (!gpioRangeCheck(gpio))
         return -1;    
         
-    if (!gpioOpen(gpio))
+    if (!gpioInfo[USER_TO_GPIO(gpio)].open) {
+        printf("GPIO not open: gpio=%d, errno=%d\n", gpio, errno);
         return -2;
+    }
         
     makeGpioPath(gpio, GPIO_PATH_VALUE);
     
-    fd = open(g_gpioPathBuff, O_WRONLY);
+    fd = open(gpioPathBuff, O_WRONLY);
     if (fd <= 0) {
         printf("Failed to open gpio value: gpio=%d, errno=%d\n", gpio, errno);
         return -3;
@@ -209,6 +235,21 @@ int libGpioBitWrite(int gpio, int value)
     }
  
     close(fd);
- 
+    gpioInfo[USER_TO_GPIO(gpio)].value = value;
+    
+    return 0;
+}
+
+int libGpioStatus(int gpio, gpioStatus_t *info)
+{
+    int reading;
+    
+    if (!gpioRangeCheck(gpio))
+        return -1; 
+    
+    // do a reading for the status info - no point having stale values
+    libGpioBitRead(gpio, &reading);
+    
+    memcpy(info, &gpioInfo[USER_TO_GPIO(gpio)], sizeof(gpioStatus_t));
     return 0;
 }
