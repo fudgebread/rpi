@@ -10,7 +10,7 @@ $ ./setup -s rpi
 $ cd <project>
 $ make 
 $ make deploy
-$ scp <package>.ipk root@<ip-address>:/home/root
+$ scp <package>.ipk root@<ip-address>:<root home>
 ```
 
 On your rpi:
