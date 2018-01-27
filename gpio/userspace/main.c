@@ -36,7 +36,7 @@ static void* getUserInput(void *args)
 		printf("GPIO > ");
 		fgets(input, 80, stdin);
 		
-		if (sscanf(input, "%s %d %s %d\n", command, &gpio, dir) < 1) {
+		if (sscanf(input, "%s %d %s\n", command, &gpio, dir) < 1) {
 			printf("GPIO > invalid command.  Try help\nGPIO > ");
 		}
 		
@@ -77,21 +77,34 @@ static void* getUserInput(void *args)
 
 int main(int argc, char *argv[])
 {
-	int status;
+	int status, startConsole = 0;
 	pthread_t userThread;
 	
-	printf("Starting gpio console\n");
-	
-	status = pthread_create(&userThread, NULL, getUserInput, NULL);
-    if (status != 0) {
-		fprintf(stderr, "Could not create user input thread (%d)\n", errno);
-		return -1;
-	}
+	while ((status = getopt(argc, argv, "c")) != -1) {
+        switch (status) {
+			case 'c': 
+			startConsole = 1; 
+			break;
+        default:
+            fprintf(stderr, "Usage: %s [-c]\n", argv[0]);
+            return -1;
+        }
+    }
     
-	status = pthread_join(userThread, NULL);
-	if (status != 0) {
-		fprintf(stderr, "Could not join user input thread (%d)\n", errno);
-		return -1;
+    if (startConsole) {
+		printf("Starting gpio console\n");
+		
+		status = pthread_create(&userThread, NULL, getUserInput, NULL);
+		if (status != 0) {
+			fprintf(stderr, "Could not create user input thread (%d)\n", errno);
+			return -1;
+		}
+		
+		status = pthread_join(userThread, NULL);
+		if (status != 0) {
+			fprintf(stderr, "Could not join user input thread (%d)\n", errno);
+			return -1;
+		}
 	}
 		
 	return 0;
