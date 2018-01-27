@@ -21,30 +21,58 @@
 #define CMD_WRITE "write"
 #define CMD_EXIT "quit"
 
+/* Idea here is we start/stop polling threads using a simple boolean
+ * enable guarded by one mutex
+ */
+static pthread_t pollThreads[GPIO_TOTAL] = {0};
+static int pollEnable[GPIO_TOTAL] = {0};
+static pthread_mutex_t pollMutexes[GPIO_TOTAL];
+
 static void printHelp()
 {
-    printf("       status [open|close|dir|read|write] <gpio> [in|out] [value]\n");
+    printf("       status [open|close|dir|read|write|poll] <gpio> [in|out] [value]\n");
 }
 
 static void printStatus()
 {
-	int i;
-	gpioStatus_t info;
-	
-	printf("       GPIO | Open | Direction | Reading\n"); 
-	printf("       -----+------+-----------+--------\n"); 
-	printf("        %d  | %s   |     %s    |    %d  \n"); 
-	for (i=GPIO_MIN; i<GPIO_MAX; i++) {
-		if (libGpioStatus(i, &info) == 0) {
-			printf("        %d  | %d   |     %s    |    %d  \n",
-					i, info.open ? "yes" : "no",
-					info.direction ? "in" : "out",
-					info.value); 
-		}
-		else {
-			printf("        %d  | ???  |    ???    |   ???  \n", i); 
-		}
-	}
+    int i;
+    gpioStatus_t info;
+    
+    printf("\n");
+    printf(" GPIO | Open | Dir | Value\n"); 
+    printf(" -----+------+-----+------\n"); 
+    for (i=GPIO_MIN; i<=GPIO_MAX; i++) {
+        if (libGpioStatus(i, &info) == 0) {
+            if (info.open) {
+                printf(" %-4d | %-4s | %-3s | %-4d\n",
+                        i, info.open ? "yes" : "no",
+                        info.direction ? "in" : "out",
+                        info.value); 
+            }
+            else {
+                printf(" %-4d | %-4s | %-3s | %-4s\n",
+                        i, "no", "NA", "NA"); 
+            }
+        }
+        else {
+            printf(" %-3d| ???  |    ???    |   ???  \n", i); 
+        }
+    }
+    printf("\n");
+}
+
+static void* pollGpio(void *args)
+{
+    int i, gpio = *((int*)args);
+    
+    // LOCK; tmpEnable = mainEnable; UNLOCK
+    
+    // while tmpEnable
+    // get reading
+    // LOCK; get new tmpEnable; UNLOCK
+    
+    // Add locking to lib now
+    return 0;
 }
 
 static void* getUserInput(void *args)
@@ -81,7 +109,12 @@ static void* getUserInput(void *args)
             }
         }
         else if (strcmp(command, CMD_READ) == 0) {
-            libGpioBitRead(gpio, &value);
+            if (libGpioBitRead(gpio, &value) == 0) {
+                printf("GPIO > value = %d\n", value);
+            }
+            else {
+                printf("GPIO > error: read failed\n");
+            }
         }
         else if (strcmp(command, CMD_WRITE) == 0) {
             libGpioBitWrite(gpio, atoi(dir));
@@ -95,7 +128,7 @@ static void* getUserInput(void *args)
     }
     
     printf("GPIO > fin!\n");
-    return NULL;
+    return 0;
 }
 
 int main(int argc, char *argv[])
