@@ -55,8 +55,9 @@ deploy: install
 	
 .PHONY: clean
 clean:
-	rm -rf $(INSTALL_DIR)
-	rm main.o rpi-gpio
+	-@rm -rf $(INSTALL_DIR)
+	-@rm main.o rpi-gpio-console
+	-@rm *.ipk
 	for dir in $(SUBDIRS); do \
 	  $(MAKE) -C $$dir clean; \
 	done

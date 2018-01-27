@@ -20,4 +20,4 @@ install: all
 
 .PHONY: clean
 clean:
-	rm librpigpio.a lib_gpio.o
+	-@rm librpigpio.a lib_gpio.o 2> /dev/null || true
