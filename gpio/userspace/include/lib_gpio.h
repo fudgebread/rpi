@@ -6,6 +6,7 @@
  
 #define GPIO_MIN 2
 #define GPIO_MAX 26
+#define GPIO_TOTAL (GPIO_MAX-GPIO_MIN+1)
 
 /**
  * GPIO information encapsulation.
