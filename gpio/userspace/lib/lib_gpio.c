@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 
 #include <errno.h>
 #include <unistd.h>
@@ -21,7 +22,6 @@
 #define GPIO_PATH_DIRECTION "/sys/class/gpio/gpio%d/direction"
 #define GPIO_PATH_VALUE "/sys/class/gpio/gpio%d/value"
 #define GPIO_PATH_BUFF_MAX 40
-#define GPIO_TOTAL (GPIO_MAX-GPIO_MIN+1)
 #define USER_TO_GPIO(a) (a-GPIO_MIN)
 
 /* Buffer for gpio path manipulation */
@@ -32,6 +32,8 @@ static gpioStatus_t gpioInfo[GPIO_TOTAL];
 
 /* Whether or not we have initialised the info array */
 static int initialised = 0;
+
+static pthread_mutex_t gpioMutexes[GPIO_TOTAL];
 
 /***********************************************************************
  * 
@@ -80,6 +82,8 @@ void libGpioInit(int gpio)
         memset(&gpioInfo[i].gpio, 0, sizeof(gpioStatus_t));
         gpioInfo[i].gpio = j;
         gpioInfo[i].open = 0;
+        
+        pthread_mutex_init(&gpioMutexes[i], NULL);
     }
     initialised = 1;
 }
@@ -181,29 +185,33 @@ int libGpioBitRead(int gpio, int *value)
     if (!gpioRangeCheck(gpio))
         return -1;    
         
-    if (!gpioInfo[USER_TO_GPIO(gpio)].open) {
-        printf("GPIO not open: gpio=%d, errno=%d\n", gpio, errno);
+    if (!gpioInfo[USER_TO_GPIO(gpio)].open)
         return -2;
-    }
-        
+    
     makeGpioPath(gpio, GPIO_PATH_VALUE);
+    
+    pthread_mutex_lock(&gpioMutexes[USER_TO_GPIO(gpio)]);
     
     fd = open(gpioPathBuff, O_RDONLY);
     if (fd <= 0) {
         printf("Failed to open gpio value: gpio=%d, errno=%d\n", gpio, errno);
+        
+        pthread_mutex_unlock(&gpioMutexes[USER_TO_GPIO(gpio)]);
         return -3;
     }
-    
+
     if (read(fd, val, 3) < 0) {
         printf("Failed to read gpio value: gpio=%d, errno=%d\n", gpio, errno);
+        
+        pthread_mutex_unlock(&gpioMutexes[USER_TO_GPIO(gpio)]);
         return -3;
     }
- 
     close(fd);
  
     *value = atoi(val);
     gpioInfo[USER_TO_GPIO(gpio)].value = *value;
-    
+    pthread_mutex_unlock(&gpioMutexes[USER_TO_GPIO(gpio)]);
+
     return 0;
 }
 
@@ -222,20 +230,27 @@ int libGpioBitWrite(int gpio, int value)
         
     makeGpioPath(gpio, GPIO_PATH_VALUE);
     
+    pthread_mutex_lock(&gpioMutexes[USER_TO_GPIO(gpio)]);
+    
     fd = open(gpioPathBuff, O_WRONLY);
     if (fd <= 0) {
         printf("Failed to open gpio value: gpio=%d, errno=%d\n", gpio, errno);
+        
+        pthread_mutex_unlock(&gpioMutexes[USER_TO_GPIO(gpio)]);
         return -3;
     }
     
     sprintf(val, "%d", value);
     if (write(fd, val, 3) < 0) {
         printf("Failed to wrte gpio value: gpio=%d, errno=%d\n", gpio, errno);
+        
+        pthread_mutex_unlock(&gpioMutexes[USER_TO_GPIO(gpio)]);
         return -3;
     }
  
     close(fd);
     gpioInfo[USER_TO_GPIO(gpio)].value = value;
+    pthread_mutex_unlock(&gpioMutexes[USER_TO_GPIO(gpio)]);
     
     return 0;
 }
@@ -250,6 +265,8 @@ int libGpioStatus(int gpio, gpioStatus_t *info)
     // do a reading for the status info - no point having stale values
     libGpioBitRead(gpio, &reading);
     
+    pthread_mutex_lock(&gpioMutexes[USER_TO_GPIO(gpio)]);
     memcpy(info, &gpioInfo[USER_TO_GPIO(gpio)], sizeof(gpioStatus_t));
+    pthread_mutex_unlock(&gpioMutexes[USER_TO_GPIO(gpio)]);
     return 0;
 }
