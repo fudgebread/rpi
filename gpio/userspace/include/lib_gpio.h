@@ -1,9 +1,23 @@
 /***********************************************************************
  * 
- * 
  * GPIO lib function declarations.
  * 
  **********************************************************************/
+ 
+#define GPIO_MIN 2
+#define GPIO_MAX 26
+#define GPIO_TOTAL (GPIO_MAX-GPIO_MIN+1)
+
+/**
+ * GPIO information encapsulation.
+ * TODO: this could use enums.
+ **/
+typedef struct gpioStatus_s {
+	int open;      /* gpio open? 1==open */
+	int gpio;      /* gpio number */
+	int direction; /* directin 1==in, 0==out */
+	int value; 	   /* gpio value */
+} gpioStatus_t;
 
 /**
  * Open a gpio port for reading/writing.
@@ -67,3 +81,25 @@ int libGpioBitRead(int gpio, int *value);
  * @return -3 other error occurred
  **/
 int libGpioBitWrite(int gpio, int value);
+
+/**
+ * Get the status for a gpio.
+ * 
+ * @param gpio the gpio pin
+ * @param info (out) the gpio's status (direction, value, etc.)
+ * 
+ * @return 0 success
+ * @return -1 invalid gpio
+ **/
+int libGpioStatus(int gpio, gpioStatus_t *info);
+
+/**
+ * Get the status for a gpio.
+ * 
+ * @param gpio the gpio pin
+ * @param info (out) the gpio's status (direction, value, etc.)
+ * 
+ * @return 1 gpio is in range
+ * @return 0 gpio is out-of-range
+ **/
+int libGpioRangeCheck(int gpio);

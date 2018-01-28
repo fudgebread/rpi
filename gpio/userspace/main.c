@@ -10,9 +10,11 @@
 #include <errno.h>
 #include <pthread.h>
 #include <string.h>
+#include <syslog.h>
 
 #include "include/lib_gpio.h"
 
+#define CMD_STATUS "status"
 #define CMD_OPEN "open"
 #define CMD_CLOSE "close"
 #define CMD_DIR "dir"
@@ -20,11 +22,45 @@
 #define CMD_WRITE "write"
 #define CMD_EXIT "quit"
 
-static const char *commands[] = {CMD_OPEN, CMD_CLOSE, 
-                                 CMD_READ, CMD_WRITE};
+
 static void printHelp()
 {
-    printf("       [open|close|dir|read|write] <gpio> [in|out] [value]\n");
+	printf(" Help\n");
+	printf(" =====\n");
+	printf(" status                - display status of all gpio \n");
+	printf(" open <gpio>           - open <gpio>\n");
+	printf(" close <gpio>          - close gpio <gpio>\n");
+	printf(" dir <gpio> [in/out]   - set direction for gpio\n");
+	printf(" read <gpio>           - read gpio <gpio>\n");
+	printf(" write <gpio> <value>  - write value to <gpio>\n");
+}
+
+static void printStatus()
+{
+    int i;
+    gpioStatus_t info;
+    
+    printf("\n");
+    printf(" GPIO | Open | Dir | Value\n"); 
+    printf(" -----+------+-----+------\n"); 
+    for (i=GPIO_MIN; i<=GPIO_MAX; i++) {
+        if (libGpioStatus(i, &info) == 0) {
+            if (info.open) {
+                printf(" %-4d | %-4s | %-3s | %-4d\n",
+                        i, info.open ? "yes" : "no",
+                        info.direction ? "in" : "out",
+                        info.value); 
+            }
+            else {
+                printf(" %-4d | %-4s | %-3s | %-4s\n",
+                        i, "no", "NA", "NA"); 
+            }
+        }
+        else {
+            printf(" %-3d| ???  |    ???    |   ???  \n", i); 
+        }
+    }
+    printf("\n");
 }
 
 static void* getUserInput(void *args)
@@ -40,7 +76,10 @@ static void* getUserInput(void *args)
             printf("GPIO > invalid command.  Try help\nGPIO > ");
         }
         
-        if (strcmp(command, CMD_OPEN) == 0) {
+        if (strcmp(command, CMD_STATUS) == 0) {
+            printStatus();
+        }
+        else if (strcmp(command, CMD_OPEN) == 0) {
             libGpioOpen(gpio);
         }
         else if (strcmp(command, CMD_CLOSE) == 0) {
@@ -58,7 +97,12 @@ static void* getUserInput(void *args)
             }
         }
         else if (strcmp(command, CMD_READ) == 0) {
-            libGpioBitRead(gpio, &value);
+            if (libGpioBitRead(gpio, &value) == 0) {
+                printf("GPIO > value = %d\n", value);
+            }
+            else {
+                printf("GPIO > error: read failed\n");
+            }
         }
         else if (strcmp(command, CMD_WRITE) == 0) {
             libGpioBitWrite(gpio, atoi(dir));
@@ -72,7 +116,7 @@ static void* getUserInput(void *args)
     }
     
     printf("GPIO > fin!\n");
-    return NULL;
+    return 0;
 }
 
 int main(int argc, char *argv[])
@@ -80,6 +124,10 @@ int main(int argc, char *argv[])
     int status, startConsole = 0;
     pthread_t userThread;
     
+    /* Open logger */
+    openlog(argv[0], 0, LOG_USER);
+    
+    /* Check user args */
     while ((status = getopt(argc, argv, "c")) != -1) {
         switch (status) {
             case 'c': 
@@ -90,10 +138,12 @@ int main(int argc, char *argv[])
             return -1;
         }
     }
-    
-    if (startConsole) {
-        printf("Starting gpio console\n");
         
+    /* Kick off the console if needs be. This is the only arg at the moment
+     * so we just block until the console exits
+     */
+    if (startConsole) {
+		        
         status = pthread_create(&userThread, NULL, getUserInput, NULL);
         if (status != 0) {
             fprintf(stderr, "Could not create user input thread (%d)\n", errno);
@@ -106,6 +156,8 @@ int main(int argc, char *argv[])
             return -1;
         }
     }
+    
+    closelog();
         
     return 0;
 }
