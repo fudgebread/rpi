@@ -92,3 +92,14 @@ int libGpioBitWrite(int gpio, int value);
  * @return -1 invalid gpio
  **/
 int libGpioStatus(int gpio, gpioStatus_t *info);
+
+/**
+ * Get the status for a gpio.
+ * 
+ * @param gpio the gpio pin
+ * @param info (out) the gpio's status (direction, value, etc.)
+ * 
+ * @return 1 gpio is in range
+ * @return 0 gpio is out-of-range
+ **/
+int libGpioRangeCheck(int gpio);

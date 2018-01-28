@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <pthread.h>
 #include <string.h>
+#include <syslog.h>
 
 #include "include/lib_gpio.h"
 
@@ -21,16 +22,17 @@
 #define CMD_WRITE "write"
 #define CMD_EXIT "quit"
 
-/* Idea here is we start/stop polling threads using a simple boolean
- * enable guarded by one mutex
- */
-static pthread_t pollThreads[GPIO_TOTAL] = {0};
-static int pollEnable[GPIO_TOTAL] = {0};
-static pthread_mutex_t pollMutexes[GPIO_TOTAL];
 
 static void printHelp()
 {
-    printf("       status [open|close|dir|read|write|poll] <gpio> [in|out] [value]\n");
+	printf(" Help\n");
+	printf(" =====\n");
+	printf(" status                - display status of all gpio \n");
+	printf(" open <gpio>           - open <gpio>\n");
+	printf(" close <gpio>          - close gpio <gpio>\n");
+	printf(" dir <gpio> [in/out]   - set direction for gpio\n");
+	printf(" read <gpio>           - read gpio <gpio>\n");
+	printf(" write <gpio> <value>  - write value to <gpio>\n");
 }
 
 static void printStatus()
@@ -59,20 +61,6 @@ static void printStatus()
         }
     }
     printf("\n");
-}
-
-static void* pollGpio(void *args)
-{
-    int i, gpio = *((int*)args);
-    
-    // LOCK; tmpEnable = mainEnable; UNLOCK
-    
-    // while tmpEnable
-    // get reading
-    // LOCK; get new tmpEnable; UNLOCK
-    
-    // Add locking to lib now
-    return 0;
 }
 
 static void* getUserInput(void *args)
@@ -136,6 +124,10 @@ int main(int argc, char *argv[])
     int status, startConsole = 0;
     pthread_t userThread;
     
+    /* Open logger */
+    openlog(argv[0], 0, LOG_USER);
+    
+    /* Check user args */
     while ((status = getopt(argc, argv, "c")) != -1) {
         switch (status) {
             case 'c': 
@@ -146,10 +138,12 @@ int main(int argc, char *argv[])
             return -1;
         }
     }
-    
-    if (startConsole) {
-        printf("Starting gpio console\n");
         
+    /* Kick off the console if needs be. This is the only arg at the moment
+     * so we just block until the console exits
+     */
+    if (startConsole) {
+		        
         status = pthread_create(&userThread, NULL, getUserInput, NULL);
         if (status != 0) {
             fprintf(stderr, "Could not create user input thread (%d)\n", errno);
@@ -162,6 +156,8 @@ int main(int argc, char *argv[])
             return -1;
         }
     }
+    
+    closelog();
         
     return 0;
 }

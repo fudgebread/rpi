@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <syslog.h>
 
 #include "../include/lib_gpio.h"
 
@@ -40,10 +41,10 @@ static pthread_mutex_t gpioMutexes[GPIO_TOTAL];
  * Local Functions
  * 
  **********************************************************************/
-static int gpioRangeCheck(int gpio)
+int libGpioRangeCheck(int gpio)
 {
     if (gpio < GPIO_MIN || gpio > GPIO_MAX) {
-        printf("Gpio out of range: gpio=%d\n", gpio);
+        syslog(LOG_ERR, "Gpio out of range: gpio=%d\n", gpio);
         return 0;
     }
     return 1;
@@ -59,7 +60,7 @@ static int gpioOpen(int gpio)
 {
     makeGpioPath(gpio, GPIO_PATH);
     if (access(gpioPathBuff, F_OK) != 0) {
-        printf("Gpio not exported: gpio=%d\n", gpio);
+        syslog(LOG_ERR, "Gpio not exported: gpio=%d\n", gpio);
         return 0;
     }
     
@@ -93,18 +94,18 @@ int libGpioOpen(int gpio)
     char tmpBuff[4];
     int fd;
     
-    if (!gpioRangeCheck(gpio))
+    if (!libGpioRangeCheck(gpio))
         return -1;        
     
     if (gpioInfo[USER_TO_GPIO(gpio)].open) {
-        printf("GPIO already open: gpio=%d, errno=%d\n", gpio, errno);
+        syslog(LOG_ERR, "GPIO already open: gpio=%d, errno=%d\n", gpio, errno);
         return 0;
     }
     
     // echo [gpio] > export
     fd = open(GPIO_PATH_EXPORT, O_WRONLY);
     if (fd <= 0) {
-        printf("Failed to export gpio: gpio=%d, errno=%d\n", gpio, errno);
+        syslog(LOG_ERR, "Failed to export gpio: gpio=%d, errno=%d\n", gpio, errno);
         return -3;
     }
     
@@ -122,19 +123,19 @@ int libGpioClose(int gpio)
     char tmpBuff[4];
     int fd;
     
-    if (!gpioRangeCheck(gpio))
+    if (!libGpioRangeCheck(gpio))
         return -1;        
     
     // if it's not open then it's already closed
     if (!gpioInfo[USER_TO_GPIO(gpio)].open) {
-        printf("GPIO already closed: gpio=%d, errno=%d\n", gpio, errno);
+        syslog(LOG_ERR, "GPIO already closed: gpio=%d, errno=%d\n", gpio, errno);
         return 0;
     }
     
     // echo [gpio] > unexport
     fd = open(GPIO_PATH_UNEXPORT, O_WRONLY);
     if (fd <= 0) {
-        printf("Failed to unexport gpio: gpio=%d, errno=%d\n", gpio, errno);
+        syslog(LOG_ERR, "Failed to unexport gpio: gpio=%d, errno=%d\n", gpio, errno);
         return -3;
     }
     
@@ -149,11 +150,11 @@ int libGpioClose(int gpio)
 int libGpioDirection(int gpio, int direction)
 {
     int fd;
-    if (!gpioRangeCheck(gpio))
+    if (!libGpioRangeCheck(gpio))
         return -1;    
         
     if (!gpioInfo[USER_TO_GPIO(gpio)].open) {
-        printf("GPIO not open: gpio=%d, errno=%d\n", gpio, errno);
+        syslog(LOG_ERR, "GPIO not open: gpio=%d, errno=%d\n", gpio, errno);
         return -2;
     }
         
@@ -161,7 +162,7 @@ int libGpioDirection(int gpio, int direction)
     
     fd = open(gpioPathBuff, O_WRONLY);
     if (fd <= 0) {
-        printf("Failed to set gpio direction: gpio=%d, errno=%d\n", gpio, errno);
+        syslog(LOG_ERR, "Failed to set gpio direction: gpio=%d, errno=%d\n", gpio, errno);
         return -3;
     }
     
@@ -182,7 +183,7 @@ int libGpioBitRead(int gpio, int *value)
     int fd;
     char val[3];
     
-    if (!gpioRangeCheck(gpio))
+    if (!libGpioRangeCheck(gpio))
         return -1;    
         
     if (!gpioInfo[USER_TO_GPIO(gpio)].open)
@@ -194,14 +195,14 @@ int libGpioBitRead(int gpio, int *value)
     
     fd = open(gpioPathBuff, O_RDONLY);
     if (fd <= 0) {
-        printf("Failed to open gpio value: gpio=%d, errno=%d\n", gpio, errno);
+        syslog(LOG_ERR, "Failed to open gpio value: gpio=%d, errno=%d\n", gpio, errno);
         
         pthread_mutex_unlock(&gpioMutexes[USER_TO_GPIO(gpio)]);
         return -3;
     }
 
     if (read(fd, val, 3) < 0) {
-        printf("Failed to read gpio value: gpio=%d, errno=%d\n", gpio, errno);
+        syslog(LOG_ERR, "Failed to read gpio value: gpio=%d, errno=%d\n", gpio, errno);
         
         pthread_mutex_unlock(&gpioMutexes[USER_TO_GPIO(gpio)]);
         return -3;
@@ -220,11 +221,11 @@ int libGpioBitWrite(int gpio, int value)
     int fd;
     char val[3];
     
-    if (!gpioRangeCheck(gpio))
+    if (!libGpioRangeCheck(gpio))
         return -1;    
         
     if (!gpioInfo[USER_TO_GPIO(gpio)].open) {
-        printf("GPIO not open: gpio=%d, errno=%d\n", gpio, errno);
+        syslog(LOG_ERR, "GPIO not open: gpio=%d, errno=%d\n", gpio, errno);
         return -2;
     }
         
@@ -234,7 +235,7 @@ int libGpioBitWrite(int gpio, int value)
     
     fd = open(gpioPathBuff, O_WRONLY);
     if (fd <= 0) {
-        printf("Failed to open gpio value: gpio=%d, errno=%d\n", gpio, errno);
+        syslog(LOG_ERR, "Failed to open gpio value: gpio=%d, errno=%d\n", gpio, errno);
         
         pthread_mutex_unlock(&gpioMutexes[USER_TO_GPIO(gpio)]);
         return -3;
@@ -242,7 +243,7 @@ int libGpioBitWrite(int gpio, int value)
     
     sprintf(val, "%d", value);
     if (write(fd, val, 3) < 0) {
-        printf("Failed to wrte gpio value: gpio=%d, errno=%d\n", gpio, errno);
+        syslog(LOG_ERR, "Failed to wrte gpio value: gpio=%d, errno=%d\n", gpio, errno);
         
         pthread_mutex_unlock(&gpioMutexes[USER_TO_GPIO(gpio)]);
         return -3;
@@ -259,7 +260,7 @@ int libGpioStatus(int gpio, gpioStatus_t *info)
 {
     int reading;
     
-    if (!gpioRangeCheck(gpio))
+    if (!libGpioRangeCheck(gpio))
         return -1; 
     
     // do a reading for the status info - no point having stale values
