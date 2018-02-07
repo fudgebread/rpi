@@ -48,7 +48,7 @@ static void printStatus()
             if (info.open) {
                 printf(" %-4d | %-4s | %-3s | %-4d\n",
                         i, info.open ? "yes" : "no",
-                        info.direction ? "in" : "out",
+                        info.direction ? "out" : "in",
                         info.value); 
             }
             else {
@@ -80,24 +80,24 @@ static void* getUserInput(void *args)
             printStatus();
         }
         else if (strcmp(command, CMD_OPEN) == 0) {
-            libGpioOpen(gpio);
+            libGpioMemMapSelect(gpio, gpioSel_all, 0); // clear all
         }
         else if (strcmp(command, CMD_CLOSE) == 0) {
-            libGpioClose(gpio);
+			libGpioMemMapSelect(gpio, gpioSel_all, 0); // clear all
         }
         else if (strcmp(command, CMD_DIR) == 0) {
             if (strcmp(dir, "in") == 0) {
-                libGpioDirection(gpio, 1);
+                libGpioMemMapSelect(gpio, gpioSel_input, 1); // set input
             }
             else if (strcmp(dir, "out") == 0) {
-                libGpioDirection(gpio, 0);
+                libGpioMemMapSelect(gpio, gpioSel_output, 1); // set out
             }
             else {
                 printHelp();
             }
         }
         else if (strcmp(command, CMD_READ) == 0) {
-            if (libGpioBitRead(gpio, &value) == 0) {
+            if (libGpioMemMapRead(gpio, &value) == 0) {
                 printf("GPIO > value = %d\n", value);
             }
             else {
@@ -105,7 +105,12 @@ static void* getUserInput(void *args)
             }
         }
         else if (strcmp(command, CMD_WRITE) == 0) {
-            libGpioBitWrite(gpio, atoi(dir));
+			if (atoi(dir) >= 1) {
+				libGpioMemMapSet(gpio);
+			}
+			else {
+				libGpioMemMapClear(gpio);
+			}
         }
         else if (strcmp(command, CMD_EXIT) == 0) {
             run = 0;
@@ -128,22 +133,42 @@ int main(int argc, char *argv[])
     openlog(argv[0], 0, LOG_USER);
     
     /* Check user args */
-    while ((status = getopt(argc, argv, "c")) != -1) {
+    while ((status = getopt(argc, argv, "ct")) != -1) {
         switch (status) {
             case 'c': 
-            startConsole = 1; 
-            break;
+				startConsole = 1; 
+				break;
+            case 't':
+				startConsole = 0;
+				break;
         default:
             fprintf(stderr, "Usage: %s [-c]\n", argv[0]);
             return -1;
         }
     }
+    
+    if (!startConsole) {
+		int i, gpio = 11;
+
+		if (libGpioMemMapInit() == -1)
+			return -1;
+		
+		libGpioMemMapSelect(11, gpioSel_all, 0); // clear all
+		libGpioMemMapSelect(11, gpioSel_output, 1); // set out
+		libGpioMemMapSet(11); // write 1
+		sleep(5);
+		libGpioMemMapClear(11); // clear 1
+		return 0;
+	}
         
     /* Kick off the console if needs be. This is the only arg at the moment
      * so we just block until the console exits
      */
     if (startConsole) {
-		        
+
+		if (libGpioMemMapInit() == -1)
+			return -1;
+			
         status = pthread_create(&userThread, NULL, getUserInput, NULL);
         if (status != 0) {
             fprintf(stderr, "Could not create user input thread (%d)\n", errno);
